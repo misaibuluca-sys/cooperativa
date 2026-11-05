@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>COOPERATIVA - Supermercado & Dedução Social 3D</title>
+  <link rel="stylesheet" href="styles.css">
+  <!-- Three.js e PeerJS (CDN para Zero-Setup P2P Multiplayer) -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+</head>
+<body>
+  <!-- Canvas 3D -->
+  <div id="game-container"></div>
+
+  <!-- Mira Retículo -->
+  <div id="crosshair"></div>
+  <div id="interaction-prompt">Pressione <strong>[E]</strong> para Interagir</div>
+
+  <!-- HUD Principal -->
+  <div id="hud" class="hidden">
+    <!-- Indicadores Econômicos -->
+    <div id="economy-panel" class="hud-box">
+      <div class="hud-item"><span class="label">Caixa:</span> <strong id="hud-money">R$ 2.500</strong></div>
+      <div class="hud-item"><span class="label">Reputação:</span> <strong id="hud-rep">100%</strong></div>
+      <div class="hud-item"><span class="label">Satisfação:</span> <strong id="hud-sat">80%</strong></div>
+      <div class="hud-item"><span class="label">Expulsões Restantes:</span> <strong id="hud-ejections">2</strong></div>
+    </div>
+
+    <!-- Papel do Jogador -->
+    <div id="role-badge" class="hud-box">
+      <span id="role-title">CARREGANDO...</span>
+      <small id="role-desc">Aguarde o início</small>
+    </div>
+
+    <!-- Lista de Tarefas / Alertas -->
+    <div id="tasks-panel" class="hud-box">
+      <h3>Tarefas da Cooperativa</h3>
+      <ul id="tasks-list">
+        <li>Operar Caixas de Pagamento</li>
+        <li>Repor Hortifrúti e Mercearia</li>
+        <li>Conferir Nota no Escritório</li>
+        <li>Limpar Sujeiras nos Corredores</li>
+      </ul>
+      <div id="proximity-audio-status">🎙️ Microfone Ativo (Proximidade)</div>
+    </div>
+
+    <!-- Chat em tempo real -->
+    <div id="chat-panel" class="hud-box">
+      <div id="chat-messages"></div>
+      <input type="text" id="chat-input" placeholder="Pressione Enter para conversar..." maxlength="120">
+    </div>
+  </div>
+
+  <!-- Telas de Menu -->
+  <!-- Menu Inicial -->
+  <div id="screen-main-menu" class="overlay-screen">
+    <div class="menu-card">
+      <h1 class="logo-title">COOPERATIVA</h1>
+      <p class="subtitle">Gerenciamento de Supermercado & Dedução Social 3D</p>
+
+      <div class="input-group">
+        <label for="player-name">Seu Nome / Apelido:</label>
+        <input type="text" id="player-name" value="Cooperado" maxlength="14">
+      </div>
+
+      <div class="input-group">
+        <label>Escolha o seu Chibi:</label>
+        <div id="avatar-selector">
+          <button class="avatar-opt active" data-color="#2563eb">Azul</button>
+          <button class="avatar-opt" data-color="#16a34a">Verde</button>
+          <button class="avatar-opt" data-color="#dc2626">Vermelho</button>
+          <button class="avatar-opt" data-color="#d97706">Amarelo</button>
+          <button class="avatar-opt" data-color="#9333ea">Roxo</button>
+          <button class="avatar-opt" data-color="#ea580c">Laranja</button>
+        </div>
+      </div>
+
+      <div class="menu-actions">
+        <button id="btn-create-room" class="btn primary">Criar Nova Cooperativa</button>
+        <div class="divider">ou</div>
+        <div class="join-row">
+          <input type="text" id="room-code-input" placeholder="CÓDIGO DA SALA" style="text-transform:uppercase;">
+          <button id="btn-join-room" class="btn secondary">Entrar na Sala</button>
+        </div>
+      </div>
+      <small class="hint">Compatível com navegadores modernos e Chromebooks.</small>
+    </div>
+  </div>
+
+  <!-- Sala de Espera (Lobby) -->
+  <div id="screen-lobby" class="overlay-screen hidden">
+    <div class="menu-card">
+      <h2>Sala de Espera da Cooperativa</h2>
+      <div class="room-code-badge">
+        Código da Sala: <strong id="lobby-code-display">---</strong>
+        <button id="btn-copy-code" class="btn-sm">Copiar</button>
+      </div>
+
+      <div class="lobby-players">
+        <h3>Membros Conectados (<span id="player-count">1</span>/6):</h3>
+        <ul id="lobby-players-list"></ul>
+      </div>
+
+      <div id="host-controls" class="hidden">
+        <p class="hint">Mínimo recomendado: 4 jogadores (ou inicie agora para testes).</p>
+        <button id="btn-start-game" class="btn primary full-width">Abrir as Portas do Supermercado</button>
+      </div>
+      <div id="client-wait-msg" class="hint">Aguardando o anfitrião iniciar o expediente...</div>
+    </div>
+  </div>
+
+  <!-- Revelação de Papel (Splash) -->
+  <div id="screen-role-reveal" class="overlay-screen hidden">
+    <div class="role-reveal-box">
+      <h1 id="reveal-role-title">VOCÊ É UM COOPERADO</h1>
+      <p id="reveal-role-instructions">Trabalhe em equipe, mantenha o estoque abastecido e evite a falência da cooperativa!</p>
+      <button id="btn-start-playing" class="btn primary">Entrar no Mercado</button>
+    </div>
+  </div>
+
+  <!-- Modal de Minigame / Interação -->
+  <div id="minigame-modal" class="overlay-screen hidden">
+    <div class="minigame-card">
+      <div class="modal-header">
+        <h2 id="minigame-title">Tarefa</h2>
+        <button id="btn-close-minigame" class="btn-close">&times;</button>
+      </div>
+      <div id="minigame-content"></div>
+    </div>
+  </div>
+
+  <!-- Reunião de Emergência & Votação -->
+  <div id="screen-meeting" class="overlay-screen hidden">
+    <div class="meeting-card">
+      <div class="meeting-header">
+        <h2>🚨 REUNIÃO GERAL DE EMERGÊNCIA 🚨</h2>
+        <p>Discuta no chat e vote em quem deve ser expulso da cooperativa.</p>
+        <div id="meeting-timer">Tempo restante: <strong>45s</strong></div>
+      </div>
+
+      <div id="voting-grid"></div>
+
+      <div class="meeting-actions">
+        <button id="btn-skip-vote" class="btn secondary">Pular Voto</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Tela de Fim de Jogo -->
+  <div id="screen-game-over" class="overlay-screen hidden">
+    <div class="game-over-card">
+      <h1 id="game-over-title">FIM DE JOGO</h1>
+      <h3 id="game-over-reason">Motivo</h3>
+      <p id="game-over-impostor">O impostor era: <strong>---</strong></p>
+      <button id="btn-return-lobby" class="btn primary">Voltar ao Menu</button>
+    </div>
+  </div>
+
+  <script type="module" src="src/main.js"></script>
+</body>
+</html>
